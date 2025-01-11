@@ -6,7 +6,7 @@ package DB;
 
 # "private" globals
 
-my ($running, $ready, $deep, $usrctxt, $evalarg, 
+my ($running, $ready, $deep, $usrctxt, $evalarg,
     @stack, @saved, @skippkg, @clients);
 my $preeval = {};
 my $posteval = {};
@@ -14,7 +14,7 @@ my $ineval = {};
 
 ####
 #
-# Globals - must be defined at startup so that clients can refer to 
+# Globals - must be defined at startup so that clients can refer to
 # them right after a C<require DB;>
 #
 ####
@@ -34,7 +34,7 @@ BEGIN {
   @DB::ret = ();        # return value of last sub executed in list context
   $DB::ret = '';        # return value of last sub executed in scalar context
 
-  # other "public" globals  
+  # other "public" globals
 
   $DB::package = '';    # current package space
   $DB::filename = '';   # current filename
@@ -54,6 +54,16 @@ BEGIN {
   @skippkg = ();
   $usrctxt = '';
   $evalarg = '';
+
+  # scan args for stdin redirect
+  for (my $i=0; $i <= $#ARGV; $i++) {
+    if ($ARGV[$i] eq "<" && $i < $#ARGV) {
+      # open stdin from file
+      open STDIN, "<", $ARGV[$i+1] or die "open stdin from \"$ARGV[$i+1]\"";
+      # remove from ARGV
+      splice @ARGV, $i, 2;
+    }
+  }
 }
 
 ####
@@ -118,22 +128,22 @@ sub DB {
     $DB::single = 0;
     $DB::signal = 0;
     $running = 0;
-    
+
     &eval if ($evalarg = DB->prestop);
     my $c;
     for $c (@clients) {
       # perform any client-specific prestop actions
       &eval if ($evalarg = $c->cprestop);
-      
+
       # Now sit in an event loop until something sets $running
       do {
-	$c->idle;                     # call client event loop; must not block
-	if ($running == 2) {          # client wants something eval-ed
-	  &eval if ($evalarg = $c->evalcode);
-	  $running = 0;
-	}
+    $c->idle;                     # call client event loop; must not block
+    if ($running == 2) {          # client wants something eval-ed
+      &eval if ($evalarg = $c->evalcode);
+      $running = 0;
+    }
       } until $running;
-      
+
       # perform any client-specific poststop actions
       &eval if ($evalarg = $c->cpoststop);
     }
@@ -142,10 +152,10 @@ sub DB {
   ($@, $!, $,, $/, $\, $^W) = @saved;
   ();
 }
-  
+
 ####
 # this takes its argument via $evalarg to preserve current @_
-#    
+#
 sub eval {
   ($@, $!, $,, $/, $\, $^W) = @saved;
   eval "$usrctxt $evalarg; &DB::save";
@@ -213,7 +223,7 @@ sub cont {
   my $i = shift;
   $s->set_tbreak($i) if $i;
   for ($i = 0; $i <= $#stack;) {
-	$stack[$i++] &= ~1;
+    $stack[$i++] &= ~1;
   }
   $DB::single = 0;
   $running = 1;
@@ -293,8 +303,8 @@ sub subs {
     my(@ret) = ();
     while (@_) {
       my $name = shift;
-      push @ret, [$DB::sub{$name} =~ /^(.*)\:(\d+)-(\d+)$/] 
-	if exists $DB::sub{$name};
+      push @ret, [$DB::sub{$name} =~ /^(.*)\:(\d+)-(\d+)$/]
+    if exists $DB::sub{$name};
     }
     return @ret;
   }
@@ -339,7 +349,7 @@ sub loadfile {
   my($file, $line) = @_;
   if (!defined $main::{'_<' . $file}) {
     my $try;
-    if (($try) = grep(m|^_<.*$file|, keys %main::)) {  
+    if (($try) = grep(m|^_<.*$file|, keys %main::)) {
       $file = substr($try,2);
     }
   }
@@ -365,7 +375,7 @@ sub lineevents {
   $fname = $DB::filename unless $fname;
   local(*DB::dbline) = "::_<$fname";
   for ($i = 1; $i <= $#DB::dbline; $i++) {
-    $ret{$i} = [$DB::dbline[$i], split(/\0/, $DB::dbline{$i})] 
+    $ret{$i} = [$DB::dbline[$i], split(/\0/, $DB::dbline{$i})]
       if defined $DB::dbline{$i};
   }
   return %ret;
@@ -472,16 +482,16 @@ sub clr_actions {
       $i = _find_subline($i) if ($i =~ /\D/);
       $s->output("Subroutine not found.\n") unless $i;
       if ($i && $DB::dbline[$i] != 0) {
-	$DB::dbline{$i} =~ s/\0[^\0]*//;
-	delete $DB::dbline{$i} if $DB::dbline{$i} =~ s/^\0?$//;
+    $DB::dbline{$i} =~ s/\0[^\0]*//;
+    delete $DB::dbline{$i} if $DB::dbline{$i} =~ s/^\0?$//;
       }
     }
   }
   else {
     for ($i = 1; $i <= $#DB::dbline ; $i++) {
       if (defined $DB::dbline{$i}) {
-	$DB::dbline{$i} =~ s/\0[^\0]*//;
-	delete $DB::dbline{$i} if $DB::dbline{$i} =~ s/^\0?$//;
+    $DB::dbline{$i} =~ s/\0[^\0]*//;
+    delete $DB::dbline{$i} if $DB::dbline{$i} =~ s/^\0?$//;
       }
     }
   }
@@ -528,7 +538,7 @@ sub ready {
 }
 
 # stubs
-    
+
 sub init {}
 sub stop {}
 sub idle {}
@@ -553,7 +563,7 @@ package Perl::LanguageServer::DebuggerInterface ;
 
 #use DB;
 
-our @ISA = qw(DB); 
+our @ISA = qw(DB);
 
 use strict ;
 
@@ -561,6 +571,7 @@ use IO::Socket ;
 use JSON ;
 use PadWalker ;
 use Scalar::Util qw{blessed reftype looks_like_number};
+use Hash::SafeKeys;
 #use Data::Dump qw{pp} ;
 use File::Basename ;
 use vars qw{@dbline %dbline $dbline} ;
@@ -577,8 +588,8 @@ our $loaded = 0 ;
 our $break_reason ;
 our $refresh ;
 
-__PACKAGE__  -> register  ; 
-__PACKAGE__  -> init  ; 
+__PACKAGE__  -> register  ;
+__PACKAGE__  -> init  ;
 
 # ---------------------------------------------------------------------------
 
@@ -590,7 +601,7 @@ sub logger
 
 # ---------------------------------------------------------------------------
 
-use constant SPECIALS => { _ => 1, INC => 1, ARGV => 1, ENV => 1, ARGVOUT => 1, SIG => 1, 
+use constant SPECIALS => { _ => 1, INC => 1, ARGV => 1, ENV => 1, ARGVOUT => 1, SIG => 1,
                             STDIN => 1, STDOUT => 1, STDERR => 1,
                             stdin => 1, stdout => 1, stderr => 1} ;
 
@@ -598,7 +609,7 @@ use vars qw{%entry @entry $entry %stab} ;
 
 # ---------------------------------------------------------------------------
 
-sub get_globals 
+sub get_globals
     {
     my ($self, $package) = @_ ;
 
@@ -613,11 +624,11 @@ no strict ;
         {
         *stab = ${stab}{$1};
         }
-use strict ;        
+use strict ;
     my $key ;
     my $val ;
-    
-    while (($key, $val) = each (%stab)) 
+
+    while (($key, $val) = each (%stab))
         {
         next if ($key eq '_') ;
         next if ($key =~ /^_</) ;
@@ -625,7 +636,7 @@ use strict ;
         next if ($key eq 'stab') ;
         next if (!$specials && (SPECIALS -> {$key} || ($key !~ /^[a-zA-Z_]/))) ;
         next if ($specials && (!SPECIALS -> {$key} && ($key =~ /^[a-zA-Z_]/))) ;
-        
+
         local(*entry) = $val;
         $key =~ s/([\0-\x1f])/'^'.chr(ord($1)+0x40)/eg ;
 
@@ -636,13 +647,13 @@ use strict ;
         my $fileno;
         $vars{"Handle:$key"} = [\"fileno=$fileno"] if (defined ($fileno = eval{fileno(*entry)})) ;
         }
-    
+
     return \%vars ;
     }
 
 # ---------------------------------------------------------------------------
 
-sub get_var_eval 
+sub get_var_eval
     {
     my ($self, $name, $varsrc, $prefix) = @_ ;
 
@@ -675,14 +686,16 @@ sub get_var_eval
             {
             $vars{"$n"} = [\$entry, $prefix . $pre . '(' . $refexpr . ')' . $post . '->[' . $n . ']' ] ;
             $n++ ;
-            }    
+            }
         }
     elsif (reftype ($ref) eq 'HASH')
         {
+        my $iterator = Hash::SafeKeys::save_iterator_state($ref);
         foreach my $entry (sort keys %$ref)
             {
             $vars{"$entry"} = [\$ref -> {$entry}, $prefix . $pre . '(' . $refexpr . ')' . $post . "->{'" . $entry . "'}" ] ;
-            }    
+            }
+        Hash::SafeKeys::restore_iterator_state($ref, $iterator);
         }
     else
         {
@@ -694,7 +707,7 @@ sub get_var_eval
 
 # ---------------------------------------------------------------------------
 
-sub get_arguments 
+sub get_arguments
     {
     my ($self, $frame) = @_ ;
 
@@ -712,7 +725,7 @@ sub get_arguments
 
 # ---------------------------------------------------------------------------
 
-sub get_locals 
+sub get_locals
     {
     my ($self, $frame) = @_ ;
 
@@ -723,10 +736,10 @@ sub get_locals
         $vars = PadWalker::peek_my ($frame) ;
         foreach my $var (keys %$vars)
             {
-            $varsrc{$var} = 
+            $varsrc{$var} =
                 [
                 $vars->{$var},
-                "el:\$varsrc->{'$var'}"    
+                "el:\$varsrc->{'$var'}"
                 ] ;
             }
         } ;
@@ -757,7 +770,7 @@ sub _get_caller_args
 
 # ---------------------------------------------------------------------------
 
-sub _eval_replace 
+sub _eval_replace
     {
     my ($___di_vars, $___di_sigil, $___di_var, $___di_suffix, $___di_frame) = @_ ;
 
@@ -777,9 +790,9 @@ sub _eval_replace
         }
     else
         {
-        return "\$\#\{\$___di_vars->{'\@$1'}}" if (($___di_var =~ /^#(.+)/) && exists $___di_vars->{"\@$1"}) ;        
+        return "\$\#\{\$___di_vars->{'\@$1'}}" if (($___di_var =~ /^#(.+)/) && exists $___di_vars->{"\@$1"}) ;
         #print STDERR "v = $___di_var  1 = $1\n" ;
-        return "$___di_sigil\{\$___di_vars->{'$___di_sigil$___di_var'}}" if (exists $___di_vars->{"$___di_sigil$___di_var"}) ;        
+        return "$___di_sigil\{\$___di_vars->{'$___di_sigil$___di_var'}}" if (exists $___di_vars->{"$___di_sigil$___di_var"}) ;
         }
 
     return "$___di_sigil$___di_var$___di_suffix" ;
@@ -787,12 +800,12 @@ sub _eval_replace
 
 # ---------------------------------------------------------------------------
 
-sub get_eval_result 
+sub get_eval_result
     {
     my ($self, $frame, $package, $expression) = @_;
- 
+
     my $___di_vars = PadWalker::peek_my ($frame) ;
- 
+
     $expression =~ s/([\%\@\$])(#?\w+)\s*([\[\{])?/_eval_replace($___di_vars, $1, $2, $3, $frame)/eg ;
 
     my $code = "package $package ; no strict ; $expression";
@@ -811,30 +824,30 @@ sub get_eval_result
             {
             if (ref ($result[0]) eq 'REF')
                 {
-                push @evalresult, $result[0] ;    
+                push @evalresult, $result[0] ;
                 }
             else
                 {
-                push @evalresult, \$result[0] ;    
+                push @evalresult, \$result[0] ;
                 }
             }
         elsif ($expression =~ /^\s*\\?\s*\%/)
             {
-            push @evalresult, { @result } ;    
-            }    
+            push @evalresult, { @result } ;
+            }
         else
             {
-            push @evalresult, \@result ;    
+            push @evalresult, \@result ;
             }
         $vars{'eval'} = [$evalresult[-1], 'eg:$Perl::LanguageServer::DebuggerInterface::evalresult[' . $#evalresult . ']'] ;
         }
-    
+
     return \%vars ;
     }
 
 # ---------------------------------------------------------------------------
 
- sub get_scalar 
+ sub get_scalar
     {
     my $ret = eval
         {
@@ -854,10 +867,10 @@ sub get_eval_result
 
 # ---------------------------------------------------------------------------
 
-sub get_vars 
+sub get_vars
     {
     my ($self, $varsrc, $vars, $array) = @_ ;
-    
+
     foreach my $k (sort { $array?$a <=> $b:$a cmp $b } keys %$varsrc)
         {
         my $key = $k ;
@@ -874,7 +887,7 @@ sub get_vars
         my $obj = '' ;
         $obj = blessed ($val) . ' ' if (blessed ($val)) ;
 
-        if (reftype ($val) eq 'SCALAR') 
+        if (reftype ($val) eq 'SCALAR')
             {
             push @$vars,
                 {
@@ -884,7 +897,7 @@ sub get_vars
                 } ;
             }
 
-        if (reftype ($val) eq 'ARRAY') 
+        if (reftype ($val) eq 'ARRAY')
             {
             my $display = $obj . '[' ;
             my $n       = 1 ;
@@ -895,11 +908,11 @@ sub get_vars
                 if ($n++ >= $max_display)
                     {
                     $display .= ',...' ;
-                    last ;    
+                    last ;
                     }
                 }
             $display .= ']' ;
-            
+
             push @$vars,
                 {
                 name  => $key,
@@ -910,10 +923,11 @@ sub get_vars
                 } ;
             }
 
-        if (reftype ($val) eq 'HASH') 
+        if (reftype ($val) eq 'HASH')
             {
             my $display = $obj . '{' ;
             my $n       = 1 ;
+            my $iterator = Hash::SafeKeys::save_iterator_state($val);
             foreach (sort keys %$val)
                 {
                 $display .= ',' if ($n > 1) ;
@@ -921,7 +935,7 @@ sub get_vars
                 if ($n++ >= $max_display / 2)
                     {
                     $display .= ',...' ;
-                    last ;    
+                    last ;
                     }
                 }
             $display .= '}' ;
@@ -934,9 +948,10 @@ sub get_vars
                 var_ref => $ref,
                 namedVariables => scalar (keys %$val),
                 } ;
+            Hash::SafeKeys::restore_iterator_state($val, $iterator);
             }
 
-        if ($key =~ /^Handle/) 
+        if ($key =~ /^Handle/)
             {
             push @$vars,
                 {
@@ -1042,7 +1057,7 @@ sub _set_var_expr
         if ($setvar)
             {
             $$expr_ref = $setvar . '=' . $$expr_ref ;
-            }    
+            }
         return ;
         }
 
@@ -1051,7 +1066,7 @@ sub _set_var_expr
         {
         $refexpr = $1 ;
         my $ref = eval ($refexpr) ;
-        return      
+        return
             {
             name => "ERROR",
             value => $@,
@@ -1059,27 +1074,27 @@ sub _set_var_expr
         if (reftype ($ref) eq 'ARRAY')
             {
             $refexpr .= '[' . $setvar . ']' ;
-            } 
+            }
         elsif (reftype ($ref) eq 'HASH')
             {
             $refexpr .= '{' . $setvar . '}' ;
-            } 
+            }
         elsif (reftype ($ref) eq 'SCALAR')
             {
             $refexpr = '${' . $refexpr . '}' ;
             }
         else
             {
-            return      
+            return
                 {
                 name => "ERROR",
                 value => "Cannot set variable if reference is of type " . reftype ($ref) ,
                 }  ;
-            } 
+            }
         }
     else
         {
-        return      
+        return
             {
             name => "ERROR",
             value => "Invalid type: $type",
@@ -1113,7 +1128,7 @@ sub req_setvar
     my $varsrc = $class -> get_varsrc ($frame_ref, $package, $type) ;
     if (!exists $varsrc -> {$setvar})
         {
-        return      
+        return
             {
             name => "ERROR",
             value => "unknown variable: $setvar",
@@ -1126,7 +1141,7 @@ sub req_setvar
 
         $$varref = ${$resultsrc -> {eval}[0]} ;
         } ;
-    return      
+    return
         {
         name => "ERROR",
         value => $@,
@@ -1173,7 +1188,7 @@ sub req_evaluate
 
         $class -> get_vars ($varsrc, \@vars) ;
         } ;
-    return      
+    return
         {
         name => "ERROR",
         value => $@,
@@ -1190,37 +1205,37 @@ sub req_threads
 
     if (defined &Coro::State::list)
         {
-        foreach my $coro (Coro::State::list()) 
+        foreach my $coro (Coro::State::list())
             {
             push @threads,
                 {
                 name         => $coro->debug_desc,
                 thread_ref   => $coro+0,
                 } ;
-            }    
+            }
         }
     else
         {
-        @threads = { thread_ref => 1, name => 'single'} ;    
+        @threads = { thread_ref => 1, name => 'single'} ;
         }
-    
+
     return { threads => \@threads } ;
     }
 
 # ---------------------------------------------------------------------------
 
 
-sub find_coro 
+sub find_coro
     {
     my ($class, $pid) = @_;
- 
+
     return if (!defined &Coro::State::list) ;
-    
-    if (my ($coro) = grep ($_ == $pid, Coro::State::list())) 
+
+    if (my ($coro) = grep ($_ == $pid, Coro::State::list()))
         {
         return $coro ;
-        } 
-    else 
+        }
+    else
         {
         $class -> logger ("$pid: no such coroutine\n") ;
         }
@@ -1254,7 +1269,7 @@ sub req_stack
         {
         package DB;
 
-        my $i = 0  ; 
+        my $i = 0  ;
 
         my @frames ;
         while ((my @call_info = caller($i++)))
@@ -1273,10 +1288,10 @@ sub req_stack
             $i-- ;
             $j++ ;
             next if ($start_frame-- > 0) ;
-            last if ($levels-- <= 0) ;    
-            
+            last if ($levels-- <= 0) ;
+
             my ($package, $filename, $line, $subroutine, $hasargs) = @$frame ;
-            
+
             my $sub_name = $subroutine ;
             $sub_name = $1 if ($sub_name =~ /.+::(.+?)$/) ;
 
@@ -1290,7 +1305,7 @@ sub req_stack
                 #moduleId    => $package,
                 'package'   => $package,
                 } ;
-            $j-- if ($sub_name eq '(eval)') ;    
+            $j-- if ($sub_name eq '(eval)') ;
             push @stack, $frame ;
             }
         }
@@ -1300,7 +1315,7 @@ sub req_stack
 
 # ---------------------------------------------------------------------------
 
-sub _set_breakpoint 
+sub _set_breakpoint
     {
     my ($class, $location, $condition) = @_ ;
 
@@ -1311,14 +1326,14 @@ sub _set_breakpoint
 
     return (0, "Subroutine not found.") unless $location ;
     return (0) if (!$location) ;
-    
+
     local *dbline = "::_<$filename" if ($filename) ;
     for (my $line = $location; $line <= $location + 10 && $location < @dbline; $line++)
         {
         if ($dbline[$line] != 0)
             {
             $dbline{$line+0} =~ s/^[^\0]*/$condition/;
-            return (1, undef, $line, $filename) ;    
+            return (1, undef, $line, $filename) ;
             }
         }
 
@@ -1329,11 +1344,11 @@ sub _set_breakpoint
 # ---------------------------------------------------------------------------
 # abs path no dereference
 # copied from package Cwd::Ext and added directory argument
-sub abs_path_nd {   
+sub abs_path_nd {
    my $abs_path = shift;
    my $dir      = shift ;
    return $abs_path if $abs_path=~m{^/$};
-    
+
    unless( $abs_path=~/^\// ){
       if ($dir) {
           $abs_path = $dir."/$abs_path";
@@ -1343,18 +1358,18 @@ sub abs_path_nd {
           $abs_path = Cwd::cwd()."/$abs_path";
       }
    }
-     
+
     my @elems = split m{/}, $abs_path;
     my $ptr = 1;
     while($ptr <= $#elems){
         if($elems[$ptr] eq ''      ){
             splice @elems, $ptr, 1;
         }
- 
+
         elsif($elems[$ptr] eq '.'  ){
             splice @elems, $ptr, 1;
         }
- 
+
         elsif($elems[$ptr] eq '..' ){
             if($ptr < 2){
                 splice @elems, $ptr, 1;
@@ -1368,7 +1383,7 @@ sub abs_path_nd {
             $ptr++;
         }
     }
- 
+
     $#elems ? join q{/}, @elems : q{/};
 }
 
@@ -1394,19 +1409,19 @@ sub req_breakpoint
             last if (!$real_filename) ;
             $real_filename = abs_path_nd ($real_filename, $dir) ;
             last if ($seen{$real_filename}++) ;
-            } 
+            }
 
         if (!defined $main::{'_<' . $real_filename})
             {
             $postponed_breakpoints{$filename} = $breakpoints ;
             foreach my $bp (@$breakpoints)
                 {
-                $bp -> [6] = $breakpoint_id++ ; 
+                $bp -> [6] = $breakpoint_id++ ;
                 }
             return { breakpoints => $breakpoints }
             }
-        }    
-     
+        }
+
     local *dbline = "::_<$real_filename" if ($real_filename) ;
     if ($real_filename)
         {
@@ -1415,7 +1430,7 @@ sub req_breakpoint
         $class -> clr_breaks () ;
         $class -> clr_actions () ;
         }
-    
+
     foreach my $bp (@$breakpoints)
         {
         my $line      = $bp -> [0] ;
@@ -1439,13 +1454,13 @@ package DB
         return if (!$loaded) ;
 
         # If this is a subroutine...
-        if (ref(\$arg) ne 'GLOB') 
+        if (ref(\$arg) ne 'GLOB')
             {
             return ;
             }
         # Not a subroutine. Deal with the file.
         local *dbline = $arg ;
-        my $filename = $dbline; 
+        my $filename = $dbline;
         my %seen ;
         my $pp_filename = $filename ;
         while (!exists $postponed_breakpoints{$pp_filename} && -l $pp_filename)
@@ -1455,7 +1470,7 @@ package DB
             last if (!$pp_filename) ;
             $pp_filename = Perl::LanguageServer::DebuggerInterface::abs_path_nd ($pp_filename, $dir) ;
             last if ($seen{$pp_filename}++) ;
-            } 
+            }
 
         #Perl::LanguageServer::DebuggerInterface -> _send ({ command => 'di_loadedfile', arguments => { session_id => $session, reason => 'new', source => { path => $filename}}}) ;
 
@@ -1465,11 +1480,24 @@ package DB
             if ($ret -> {breakpoints_set})
                 {
                 delete $postponed_breakpoints{$pp_filename} ;
-                Perl::LanguageServer::DebuggerInterface -> _send ({ command => 'di_breakpoints', 
+                Perl::LanguageServer::DebuggerInterface -> _send ({ command => 'di_breakpoints',
                                                     arguments => { session_id => $session, %$ret}}) ;
                 }
             }
         }
+    }
+
+# ---------------------------------------------------------------------------
+
+sub req_source
+    {
+    my ($class, $params) = @_ ;
+
+    my $filename    = $params -> {filename} ;
+    my $source = join("", @{$main::{'_<'.$filename}});
+    $source =~ s/\n;$//;
+	  
+    return { content => $source };
     }
 
 # ---------------------------------------------------------------------------
@@ -1491,7 +1519,7 @@ sub req_can_break
         last if (!$real_filename) ;
         $real_filename = abs_path_nd ($real_filename, $dir) ;
         last if ($seen{$real_filename}++) ;
-        } 
+        }
 
     return { breakpoints => [] } if (!defined $main::{'_<' . $real_filename}) ;
 
@@ -1505,14 +1533,14 @@ sub req_can_break
         {
         if ($dbline[$line] != 0)
             {
-            push @bp, { line => $line } ;    
-            }        
+            push @bp, { line => $line } ;
+            }
         }
-        
+
     return { breakpoints => \@bp };
     }
 
-    
+
 # ---------------------------------------------------------------------------
 
 sub req_continue
@@ -1613,7 +1641,7 @@ sub _recv
 
         while ($buffer =~ s/^(.*?)\R//)
             {
-            $line = $1 ;    
+            $line = $1 ;
             $class -> logger ("line=<$line>\n") if ($debug) ;
             last header if ($line eq '') ;
             $header{$1} = $2 if ($line =~ /(.+?):\s*(.+)/) ;
@@ -1623,18 +1651,18 @@ sub _recv
     my $len = $header{'Content-Length'} ;
     my $data ;
     $class -> logger ("len=$len len buffer=", length ($buffer), "\n")  if ($debug) ;
-    while ($len > length ($buffer)) 
+    while ($len > length ($buffer))
         {
         $cnt = sysread ($socket, $buffer, $len - length ($buffer), length ($buffer)) ;
         die "read_error reading data ($!)" if ($cnt < 0) ;
         return if ($cnt == 0) ;
         }
-    if ($len == length ($buffer)) 
+    if ($len == length ($buffer))
         {
         $data = $buffer ;
         $buffer = '' ;
         }
-    elsif ($len < length ($buffer)) 
+    elsif ($len < length ($buffer))
         {
         $data   = substr ($buffer, 0, $len) ;
         $buffer = substr ($buffer, $len) ;
@@ -1642,7 +1670,7 @@ sub _recv
     else
         {
         die "to few data bytes" ;
-        }    
+        }
     $class -> logger ("read data=", $data, "\n") if ($debug) ;
     $class -> logger ("read header=", "%header", "\n") if ($debug) ;
 
@@ -1654,7 +1682,7 @@ sub _recv
         $class -> _send ({ command => 'di_response', seq => $cmddata -> {seq}, arguments => $result}) ;
         return ;
         }
-    die "unknown cmd $cmd" ;    
+    die "unknown cmd $cmd" ;
     }
 
 
@@ -1678,19 +1706,25 @@ sub init
     $class -> logger ("enter init\n") if ($debug) ;
 
     $refresh = ($ENV{PLSDI_OPTIONS} =~ /reload_modules/)?1:0 ;
-    if ($refresh) 
+    if ($refresh)
         {
-        require Class::Refresh ;  
+        require Class::Refresh ;
         Class::Refresh -> refresh ;
         }
 
     my $remote ;
     my $port ;
     ($remote, $port) = split /:/, $ENV{PLSDI_REMOTE} ;
+    if ($remote =~ m/^([0-9.]+)$/) {
+      $remote = $1; # untaint
+    }
+    if ($port =~ m/^(\d+)$/) {
+      $port = $1; # untaint
+    }
 
     $socket = IO::Socket::INET->new(PeerAddr => $remote,
                                     PeerPort => $port,
-                                    Proto    => 'tcp') 
+                                    Proto    => 'tcp')
             or die "Cannot connect to $remote:$port ($!)";
 
     $class -> ready (1) ;
@@ -1762,14 +1796,14 @@ sub cprestop
 
     @evalresult = () ;
     my $tid = defined ($Coro::current)?$Coro::current+0:1 ;
-    $class -> _send ({ command => 'di_break', 
-                       arguments => 
-                        { 
-                        thread_ref => $tid, 
+    $class -> _send ({ command => 'di_break',
+                       arguments =>
+                        {
+                        thread_ref => $tid,
                         session_id => $session,
                         ($break_reason?(reason => $break_reason):()),
                         }}) ;
-    $break_reason = undef ;                        
+    $break_reason = undef ;
     }
 
 # ---------------------------------------------------------------------------

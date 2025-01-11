@@ -19,15 +19,15 @@ no warnings 'uninitialized' ;
 has 'config' =>
     (
     isa => 'HashRef',
-    is  => 'ro' 
-    ) ; 
+    is  => 'ro'
+    ) ;
 
 has 'is_shutdown' =>
     (
     isa => 'Bool',
     is  => 'rw',
-    default => 0, 
-    ) ; 
+    default => 0,
+    ) ;
 
 has 'files' =>
     (
@@ -53,7 +53,7 @@ has 'symbols' =>
 has 'path_map' =>
     (
     isa => 'Maybe[ArrayRef]',
-    is  => 'rw'    
+    is  => 'rw'
     ) ;
 
 has 'file_filter_regex' =>
@@ -83,6 +83,12 @@ has 'perlinc' =>
     is  => 'rw',
     ) ;
 
+has 'use_taint_for_syntax_check' =>
+    (
+    isa => 'Maybe[Bool]',
+    is  => 'rw'
+    ) ;
+
 has 'show_local_vars' =>
     (
     isa => 'Maybe[Bool]',
@@ -94,7 +100,7 @@ has 'parser_channel' =>
     (
     is => 'rw',
     isa => 'Coro::Channel',
-    default => sub { Coro::Channel -> new }    
+    default => sub { Coro::Channel -> new }
     ) ;
 
 has 'state_dir' =>
@@ -116,8 +122,8 @@ has 'disable_cache' =>
 sub logger
     {
     my $self = shift ;
-    
-    Perl::LanguageServer::logger (undef, @_) ;    
+
+    Perl::LanguageServer::logger (undef, @_) ;
     }
 
 # ----------------------------------------------------------------------------
@@ -130,7 +136,7 @@ sub mkpath
     aio_stat ($dir) ;
     if (! -d _)
         {
-        $self -> mkpath (dirname($dir)) ; 
+        $self -> mkpath (dirname($dir)) ;
         aio_mkdir ($dir, 0755) and die "Cannot make $dir ($!)" ;
         }
     }
@@ -158,7 +164,7 @@ sub shutdown
     {
     my ($self) = @_ ;
 
-    $self -> is_shutdown (1) ;    
+    $self -> is_shutdown (1) ;
     }
 
 # ---------------------------------------------------------------------------
@@ -177,7 +183,7 @@ sub uri_server2client
         }
     #print STDERR "<uri_server2client $uri\n" ;
 
-    return $uri ;    
+    return $uri ;
     }
 
 # ---------------------------------------------------------------------------
@@ -196,16 +202,16 @@ sub uri_client2server
         }
     #print STDERR "<uri_client2server $uri\n" ;
 
-    return $uri ;    
+    return $uri ;
     }
 
 # ---------------------------------------------------------------------------
 
 sub file_server2client
     {
-    my ($self, $fn) = @_ ;
+    my ($self, $fn, $map) = @_ ;
 
-    my $map = $self -> path_map ;
+    $map ||= $self -> path_map ;
     return $fn if (!$map) ;
 
     foreach my $m (@$map)
@@ -214,16 +220,16 @@ sub file_server2client
         last if ($fn =~ s/$m->[2]/$m->[3]/) ;
         }
 
-    return $fn ;    
+    return $fn ;
     }
 
 # ---------------------------------------------------------------------------
 
 sub file_client2server
     {
-    my ($self, $fn) = @_ ;
+    my ($self, $fn, $map) = @_ ;
 
-    my $map = $self -> path_map ;
+    $map ||= $self -> path_map ;
     return $fn if (!$map) ;
 
     $fn =~ s/\\/\//g ;
@@ -234,26 +240,7 @@ sub file_client2server
         last if ($fn =~ s/$m->[3]/$m->[2]/) ;
         }
 
-    return $fn ;    
-    }
-
-# ---------------------------------------------------------------------------
-
-sub add_path_mapping
-    {
-    my ($self, $fn_server, $fn_client) = @_ ;
-    my $map = $self -> path_map ;
-    $map = $self -> path_map ([]) if (!$map) ;
-
-
-    foreach my $m (@$map)
-        {
-        #print STDERR "add file_server2client $m->[2] -> $m->[3]\n" ;
-        return if ($fn_server eq $m->[2]) ;
-        }
-
-    unshift @$map, ['file://' . $fn_server, 'file://' . $fn_client, $fn_server, $fn_client] ;
-    return  ;    
+    return $fn ;
     }
 
 # ---------------------------------------------------------------------------
@@ -261,15 +248,15 @@ sub add_path_mapping
 sub set_workspace_folders
     {
     my ($self, $workspace_folders) = @_ ;
-    
+
     my $folders = $self -> folders ;
     foreach my $ws (@$workspace_folders)
         {
         my $diruri = $self -> uri_client2server ($ws -> {uri}) ;
-        
-        my $dir = substr ($diruri, 7) ;    
+
+        my $dir = substr ($diruri, 7) ;
         $dir =~ s#^/(\w)%3A/#$1:/# ;
-        $folders -> {$ws -> {uri}} = $dir ; 
+        $folders -> {$ws -> {uri}} = $dir ;
         }
     }
 
@@ -284,7 +271,7 @@ sub add_diagnostic_messages
     $files -> {$uri}{messages_version}  = $version if (defined ($version));
 
     # make sure all old messages associated with this uri are cleaned up
-    my %diags = ( map { $_ => [] } @{$files -> {$uri}{diags} || ['-'] } ) ;
+    my %diags = ( map { $_ => [] } @{$files -> {$uri}{diags} } ) ;
     foreach my $src (keys %{$files -> {$uri}{messages}})
         {
         my $msgs = $files -> {$uri}{messages}{$src} ;
@@ -302,7 +289,7 @@ sub add_diagnostic_messages
                 if ($lineno)
                     {
                     if ($msg)
-                        {    
+                        {
                         my $diag =
                             {
                             #   range: Range;
@@ -315,13 +302,13 @@ sub add_diagnostic_messages
                             #   relatedInformation?: DiagnosticRelatedInformation[];
                             #   data?: unknown;
 
-                            # DiagnosticSeverity 
+                            # DiagnosticSeverity
                             # const Error: 1 = 1;
                             # const Warning: 2 = 2;
                             # const Information: 3 = 3;
                             # const Hint: 4 = 4;
 
-                            # DiagnosticTag 
+                            # DiagnosticTag
                             #  * Clients are allowed to render diagnostics with this tag faded out
                             #  * instead of having an error squiggle.
                             # export const Unnecessary: 1 = 1;
@@ -349,7 +336,7 @@ sub add_diagnostic_messages
                     $lastline = $lineno ;
                     $lineno = 0 ;
                     $msg    = '' ;
-                    }    
+                    }
                 }
             }
         }
@@ -357,21 +344,18 @@ sub add_diagnostic_messages
 
     foreach my $filename (keys %diags)
         {
-        foreach my $filename (keys %diags)
+        my $fnuri = !$filename || $filename eq '-'?$uri:$self -> uri_server2client ('file://' . $filename) ;
+        my $result =
             {
-            my $fnuri = !$filename || $filename eq '-'?$uri:$self -> uri_server2client ('file://' . $filename) ;
-            my $result =
+            method => 'textDocument/publishDiagnostics',
+            params =>
                 {
-                method => 'textDocument/publishDiagnostics',
-                params => 
-                    {
-                    uri => $fnuri,
-                    diagnostics => $diags{$filename},
-                    },
-                } ;
+                uri => $fnuri,
+                diagnostics => $diags{$filename},
+                },
+            } ;
 
-            $server -> send_notification ($result) ;
-            }
+        $server -> send_notification ($result) ;
         }
     }
 

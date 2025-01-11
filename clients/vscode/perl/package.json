@@ -2,7 +2,7 @@
     "name": "perl",
     "displayName": "Perl",
     "description": "Language Server and Debugger for Perl",
-    "version": "2.3.0",
+    "version": "2.6.2",
     "publisher": "richterger",
     "repository": "https://github.com/richterger/Perl-LanguageServer",
     "license": "SEE LICENSE IN LICENSE",
@@ -74,6 +74,36 @@
                     "default": null,
                     "description": "optional arguments for ssh"
                 },
+                "perl.containerCmd": {
+                    "type": "string",
+                    "default": null,
+                    "description": "If set Perl::LanguageServer can run inside a container. Options are: 'docker', 'docker-compose', 'podman', 'kubectl'"
+                },
+                "perl.containerArgs": {
+                    "type": "array",
+                    "default": null,
+                    "description": "arguments for containerCmd. Varies depending on containerCmd."
+                },
+                "perl.containerMode": {
+                    "type": "string",
+                    "default": "exec",
+                    "description": "To start a new container, set to 'run', to execute inside an existing container set to 'exec'. Note: kubectl only supports 'exec'"
+                },
+                "perl.containerName": {
+                    "type": "string",
+                    "default": null,
+                    "description": "Image to start or container to exec inside or pod to use"
+                },
+                "perl.env": {
+                    "type": "object",
+                    "description": "object with environment settings for command that starts the LanguageServer, e.g. can be used to set KUBECONFIG.",
+                    "default": null
+                },
+                "perl.disablePassEnv": {
+                    "type": "boolean",
+                    "description": "per default enviroment from vscode will be passed to debuggee, syntax check and perltidy. If set to true, no enviroment variables will be passed.",
+                    "default": null
+                },
                 "perl.pathMap": {
                     "type": "array",
                     "default": null,
@@ -83,6 +113,11 @@
                     "type": "array",
                     "default": null,
                     "description": "array with paths to add to perl library path. This setting is used by the syntax checker and for the debuggee and also for the LanguageServer itself. perl.perlInc should be absolute paths."
+                },
+                "perl.useTaintForSyntaxCheck": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Use -T for syntax check."
                 },
                 "perl.fileFilter": {
                     "type": "array",
@@ -110,9 +145,14 @@
                     "description": "if true, the LanguageServer will not cache the result of parsing source files on disk, so it can be used within readonly directories"
                 },
                 "perl.debugAdapterPort": {
-                    "type": "string",
-                    "default": "13603",
+                    "type": "integer",
+                    "default": 13603,
                     "description": "port to use for connection between vscode and debug adapter inside Perl::LanguageServer. On a multi user system every user must use a different port."
+                },
+                "perl.debugAdapterPortRange": {
+                    "type": "integer",
+                    "default": 100,
+                    "description": "if debugAdapterPort is in use try ports from debugAdapterPort to debugAdapterPort + debugAdapterPortRange. Default 100."
                 }
             }
         },
@@ -147,8 +187,8 @@
                                 "default": true
                             },
                             "args": {
-                                "type": "array",
-                                "description": "optional, array with arguments for perl program.",
+                                "type": [ "array", "string" ],
+                                "description": "optional, array or string with arguments for perl program.",
                                 "default": null
                             },
                             "env": {
@@ -165,7 +205,43 @@
                                 "type": "boolean",
                                 "description": "Automatically reload changed Perl modules while debugging.",
                                 "default": true
+                            },
+                            "sudoUser": {
+                                "type": "string",
+                                "description": "optional, if set run debug process with sudo -u <sudoUser>.",
+                                "default": null
+                            },
+                            "useTaintForDebug": {
+                                "type": "boolean",
+                                "description": "optional, if set run debug process in taint mode.",
+                                "default": false
+                            },
+                            "pathMap": {
+                                "type": "array",
+                                "default": null,
+                                "description": "mapping of local to remote paths for this debug session (overwrites global `perl.path_map`)"
+                            },
+                            "containerCmd": {
+                                "type": "string",
+                                "default": null,
+                                "description": "If set debugger runs inside a container. Options are: 'docker', 'docker-compose', 'podman', 'kubectl'"
+                            },
+                            "containerArgs": {
+                                "type": "array",
+                                "default": null,
+                                "description": "arguments for containerCmd. Varies depending on containerCmd."
+                            },
+                            "containerMode": {
+                                "type": "string",
+                                "default": "exec",
+                                "description": "To start a new container, set to 'run', to debug inside an existing container set to 'exec'. Note: kubectl only supports 'exec'"
+                            },
+                            "containerName": {
+                                "type": "string",
+                                "default": null,
+                                "description": "Image to start or container to exec inside or pod to use"
                             }
+                        
                         }
                     }
                 },
@@ -205,7 +281,7 @@
         "@types/mocha": "^8.2.3",
         "@types/node": "^12.20.17",
         "@types/vscode": "^1.58.0",
-        "@typescript-eslint/parser": "^2.3.0",
+        "@typescript-eslint/parser": "^2.4.0",
         "eslint": "^6.4.0",
         "mocha": "^9.0.3",
         "typescript": "^4.3.5"

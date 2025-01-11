@@ -1,4 +1,4 @@
-use v5.18;
+use v5.16;
 use strict;
 use warnings;
 use ExtUtils::MakeMaker;
@@ -45,10 +45,13 @@ WriteMakefile(
                 url => 'https://github.com/richterger/Perl-LanguageServer.git',
                 web => 'https://github.com/richterger/Perl-LanguageServer',
             },
+            bugtracker => {
+                web => 'https://github.com/richterger/Perl-LanguageServer/issues'
+            },
         },
     },
     PL_FILES         => {},
-    MIN_PERL_VERSION => '5.014',
+    MIN_PERL_VERSION => '5.016',
     CONFIGURE_REQUIRES => {
         'ExtUtils::MakeMaker' => '0',
     },
@@ -67,6 +70,8 @@ WriteMakefile(
         'Scalar::Util'       => '0',
         'Class::Refresh'     => '0',
         'Compiler::Lexer'    => '0.23',
+        'Hash::SafeKeys'     => '0',
+        'Encode::Locale'     => '0',
     },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES => 'Perl-LanguageServer-*' },
